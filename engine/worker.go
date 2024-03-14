@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"sync"
 
 	"github.com/apernet/OpenGFW/io"
 	"github.com/apernet/OpenGFW/ruleset"
@@ -23,6 +24,25 @@ type workerPacket struct {
 	StreamID   uint32
 	Packet     gopacket.Packet
 	SetVerdict func(io.Verdict, []byte) error
+}
+
+var workerPacketPool = sync.Pool{
+	New: func() any {
+		return &workerPacket{}
+	},
+}
+
+func getWorkerPacket() *workerPacket {
+	wpkt := workerPacketPool.Get().(*workerPacket)
+	return wpkt
+}
+
+func freeWorkerPacket(wpkt *workerPacket) {
+	wpkt.StreamID = 0
+	wpkt.Packet = nil
+	wpkt.SetVerdict = nil
+
+	workerPacketPool.Put(wpkt)
 }
 
 type worker struct {
@@ -122,6 +142,8 @@ func (w *worker) Run(ctx context.Context) {
 			}
 			v, b := w.handle(wPkt.StreamID, wPkt.Packet)
 			_ = wPkt.SetVerdict(v, b)
+
+			freeWorkerPacket(wPkt)
 		}
 	}
 }

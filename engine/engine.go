@@ -108,12 +108,14 @@ func (e *engine) dispatch(ioEntry io.PacketIO, p io.Packet) bool {
 	// Load balance by stream ID
 	index := p.StreamID() % uint32(len(e.workers))
 	packet := gopacket.NewPacket(data, layerType, gopacket.DecodeOptions{Lazy: true, NoCopy: true})
-	e.workers[index].Feed(&workerPacket{
-		StreamID: p.StreamID(),
-		Packet:   packet,
-		SetVerdict: func(v io.Verdict, b []byte) error {
-			return ioEntry.SetVerdict(p, v, b)
-		},
-	})
+
+	wpkt := getWorkerPacket()
+	wpkt.StreamID = p.StreamID()
+	wpkt.Packet = packet
+	wpkt.SetVerdict = func(v io.Verdict, b []byte) error {
+		return ioEntry.SetVerdict(p, v, b)
+	}
+
+	e.workers[index].Feed(wpkt)
 	return true
 }
